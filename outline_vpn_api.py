@@ -8,12 +8,22 @@ from dataclasses import dataclass
 class OutlineKey:
     key_id: int
     name: str
-    password: str
-    port: int
-    method: str
     access_url: str
     used_bytes: int
     data_limit: typing.Optional[int]
+
+    def get_stats(self) -> str:
+        used_bytes = round(self.used_bytes * 1e-9, 2)
+        if self.data_limit is None:
+            return f"({used_bytes} / None ГБ)"
+
+        return f"({used_bytes} / {round(self.data_limit * 1e-9, 2)} ГБ)"
+
+    def __str__(self):
+        return f"ID: {self.key_id}, Name: {self.name}"
+
+    def get_formatted_url(self):
+        return f"<code>{self.access_url.replace('?outline=1', '#GingerBeaverVpn 🇳🇱')}</code>"
 
 
 class OutlineServerErrorException(Exception):
@@ -41,15 +51,15 @@ class OutlineVPN:
                 result = []
                 limit = await self.get_default_data_limit()
                 for key in response_json.get("accessKeys"):
+                    data_limit = key.get("dataLimit", {}).get("bytes")
+                    if data_limit or data_limit == 0:
+                        limit = data_limit
                     result.append(
                         OutlineKey(
                             key_id=key.get("id"),
                             name=key.get("name"),
-                            password=key.get("password"),
-                            port=key.get("port"),
-                            method=key.get("method"),
-                            access_url=key.get("accessUrl").replace('?outline=1', '#GingerBeaverVpn 🇳🇱'),
-                            data_limit=key.get("dataLimit", {}).get("bytes") or limit,
+                            access_url=key.get("accessUrl"),
+                            data_limit=limit,
                             used_bytes=response_metrics_json
                                        .get("bytesTransferredByUserId")
                                        .get(key.get("id")) or 0,
@@ -67,10 +77,7 @@ class OutlineVPN:
                 outline_key = OutlineKey(
                     key_id=key.get("id"),
                     name=key.get("name"),
-                    password=key.get("password"),
-                    port=key.get("port"),
-                    method=key.get("method"),
-                    access_url=key.get("accessUrl").replace('?outline=1', '#GingerBeaverVpn 🇳🇱'),
+                    access_url=key.get("accessUrl"),
                     used_bytes=0,
                     data_limit=limit,
                 )
@@ -98,20 +105,20 @@ class OutlineVPN:
 
         return None
 
-    async def set_data_limit(self, key_id: int, bytes_limit: int) -> bool:
-        data = {"limit": bytes_limit}
-        async with self.session.put(f"{self.api_url}/access-keys/{key_id}/data-limit", data=data) as response:
-            return response.ok
-
-    async def delete_data_limit(self, key_id: int) -> bool:
-        async with self.session.delete(f"{self.api_url}/access-keys/{key_id}/data-limit") as response:
-            return response.ok
-
-    async def disable_user(self, key_id: int) -> bool:
-        return await self.set_data_limit(key_id, 0)
-
-    async def enable_user(self, key_id: int) -> bool:
-        return await self.delete_data_limit(key_id)
+    # async def set_data_limit(self, key_id: int, bytes_limit: int) -> bool:
+    #     data = {"limit": bytes_limit}
+    #     async with self.session.put(f"{self.api_url}/access-keys/{key_id}/data-limit", data=data) as response:
+    #         return response.ok
+    #
+    # async def delete_data_limit(self, key_id: int) -> bool:
+    #     async with self.session.delete(f"{self.api_url}/access-keys/{key_id}/data-limit") as response:
+    #         return response.ok
+    #
+    # async def disable_user(self, key_id: int) -> bool:
+    #     return await self.set_data_limit(key_id, 0)
+    #
+    # async def enable_user(self, key_id: int) -> bool:
+    #     return await self.delete_data_limit(key_id)
 
     async def get_default_data_limit(self):
         async with self.session.get(f"{self.api_url}/server") as response:

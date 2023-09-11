@@ -25,18 +25,14 @@ async def cmd_start(message: types.Message):
 async def cmd_stats(message: types.Message, client: OutlineVPN):
     keys = await client.get_keys()
     keys.sort(key=lambda k: k.used_bytes, reverse=True)
-    await message.answer(';\n'.join(
-        f"ID {key.key_id}, {key.name}: "
-        f"{round(key.used_bytes * 1e-9, 2)} ГБ / {round(key.data_limit * 1e-9, 2)}"
-        for key in keys
-    ))
+    await message.answer(';\n'.join(f"{key} {key.get_stats()}" for key in keys))
 
 
 @dp.message(Command("create"))
 async def cmd_create(message: types.Message, command: CommandObject, client: OutlineVPN):
     new_key = await client.create_key(command.args)
-    await message.answer(f"Ключ ID: {new_key.key_id}, Name: '{new_key.name}' создан!")
-    await message.answer(f"<code>{new_key.access_url}</code>", parse_mode="HTML")
+    await message.answer(f"{new_key} создан!")
+    await message.answer(f"{new_key.get_formatted_url()}", parse_mode="HTML")
 
 
 @dp.message(Command("del"))
@@ -51,7 +47,7 @@ async def cmd_del(message: types.Message, command: CommandObject, client: Outlin
 
 @dp.message(Command("get_keys"))
 async def cmd_get_keys(message: types.Message, client: OutlineVPN):
-    formatted_keys = (f"ID: {key.key_id}, Name: {key.name}\n<code>{key.access_url}</code>"
+    formatted_keys = (f"{key}\n{key.get_formatted_url()}"
                       for key in await client.get_keys())
     await message.answer(';\n'.join(formatted_keys), parse_mode="HTML")
 
@@ -61,9 +57,7 @@ async def cmd_get_key(message: types.Message, command: CommandObject, client: Ou
         parsed_id = int(command.args)
         key = await client.get_key(parsed_id)
         if key:
-            key_stats = f"{round(key.used_bytes * 1e-9, 2)} / {round(key.data_limit * 1e-9, 2)} ГБ"
-            await message.answer(f"ID: {key.key_id}, Name: {key.name}, {key_stats}"
-                                 f"\n<code>{key.access_url}</code>", parse_mode="HTML")
+            await message.answer(f"{key}\n{key.get_stats()}\n{key.get_formatted_url()}", parse_mode="HTML")
         else:
             await message.answer(f"Ключ ID: {parsed_id} не существует!")
     except (ValueError, TypeError):
