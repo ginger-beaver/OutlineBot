@@ -5,7 +5,7 @@ import os
 from aiogram import Bot, Dispatcher, types, F, BaseMiddleware
 from aiogram.filters import Command, CommandObject
 from dotenv import load_dotenv
-from outline_vpn_api import OutlineVPN
+from outline_vpn_api import OutlineVPN, OutlineKey
 
 logging.basicConfig(level=logging.INFO)
 load_dotenv()
@@ -23,12 +23,12 @@ async def cmd_start(message: types.Message):
 
 @dp.message(Command("stats"))
 async def cmd_stats(message: types.Message, client: OutlineVPN):
-    formatted_keys = [(key.name, 0 if key.used_bytes is None else key.used_bytes, key.data_limit)
-                      for key in await client.get_keys()]
-    formatted_keys.sort(key=lambda k: k[1], reverse=True)
+    keys = await client.get_keys()
+    keys.sort(key=lambda k: k.used_bytes, reverse=True)
     await message.answer(';\n'.join(
-        f"{key[0]}: {round(key[1] * 1e-9, 2)} ГБ / {key[2]}"
-        for key in formatted_keys
+        f"ID {key.key_id}, {key.name}: "
+        f"{round(key.used_bytes * 1e-9, 2)} ГБ / {round(key.data_limit * 1e-9, 2)}"
+        for key in keys
     ))
 
 
@@ -54,6 +54,45 @@ async def cmd_get_keys(message: types.Message, client: OutlineVPN):
     formatted_keys = (f"ID: {key.key_id}, Name: {key.name}\n<code>{key.access_url}</code>"
                       for key in await client.get_keys())
     await message.answer(';\n'.join(formatted_keys), parse_mode="HTML")
+
+@dp.message(Command("get_key"))
+async def cmd_get_key(message: types.Message, command: CommandObject, client: OutlineVPN):
+    try:
+        parsed_id = int(command.args)
+        key = await client.get_key(parsed_id)
+        if key:
+            key_stats = f"{round(key.used_bytes * 1e-9, 2)} / {round(key.data_limit * 1e-9, 2)} ГБ"
+            await message.answer(f"ID: {key.key_id}, Name: {key.name}, {key_stats}"
+                                 f"\n<code>{key.access_url}</code>", parse_mode="HTML")
+        else:
+            await message.answer(f"Ключ ID: {parsed_id} не существует!")
+    except (ValueError, TypeError):
+        await message.answer(f"Неправильный формат аргумента!")
+
+@dp.message(Command("get_default_limit"))
+async def cmd_get_default(message: types.Message, client: OutlineVPN):
+    data = await client.get_default_data_limit()
+    text = f"{data * 1e-9} ГБ" if data else "не установлен!"
+    await message.answer(f"Общий лимит {text}")
+
+
+# @dp.message(Command("set_default_limit"))
+# async def cmd_set_default_limit(message: types.Message, command: CommandObject, client: OutlineVPN):
+#     try:
+#         parsed_bytes = int(command.args)
+#         if await client.set_default_data_limit(int(parsed_bytes * 1e+9)):
+#             await message.answer(f"Лимит в {parsed_bytes} ГБ установлен!")
+#         else:
+#             await message.answer("Не удалось установить лимит!")
+#     except (ValueError, TypeError):
+#         await message.answer(f"Неправильный формат аргумента!")
+#
+# @dp.message(Command("del_default_limit"))
+# async def cmd_del_default_limit(message: types.Message, client: OutlineVPN):
+#     if await client.delete_default_data_limit():
+#         await message.answer("Лимит удален!")
+#     else:
+#         await message.answer("Не удалось удалить лимит!")
 
 
 class OutlineSessionMiddleware(BaseMiddleware):
