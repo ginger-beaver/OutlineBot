@@ -49,17 +49,17 @@ class OutlineVPN:
             if response.ok and response_metrics.ok:
                 response_json, response_metrics_json = await response.json(), await response_metrics.json()
                 result = []
-                limit = await self.get_default_data_limit()
+                default_limit = await self.get_default_data_limit()
+                key_limit = 0
                 for key in response_json.get("accessKeys"):
                     data_limit = key.get("dataLimit", {}).get("bytes")
-                    if data_limit or data_limit == 0:
-                        limit = data_limit
+                    key_limit = data_limit if (data_limit or data_limit == 0) else default_limit
                     result.append(
                         OutlineKey(
                             key_id=key.get("id"),
                             name=key.get("name"),
                             access_url=key.get("accessUrl"),
-                            data_limit=limit,
+                            data_limit=key_limit,
                             used_bytes=response_metrics_json
                                        .get("bytesTransferredByUserId")
                                        .get(key.get("id")) or 0,
